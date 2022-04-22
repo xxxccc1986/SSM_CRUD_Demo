@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xmlns:context="http://www.springframework.org/schema/context"
+       xmlns:aop="http://www.springframework.org/schema/aop"
+       xmlns:tx="http://www.springframework.org/schema/tx"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans
+                           http://www.springframework.org/schema/beans/spring-beans.xsd
+                           http://www.springframework.org/schema/context
+                           http://www.springframework.org/schema/context/spring-context.xsd
+                           http://www.springframework.org/schema/aop
+                           http://www.springframework.org/schema/aop/spring-aop.xsd
+                           http://www.springframework.org/schema/tx
+                           http://www.springframework.org/schema/tx/spring-tx.xsd">
+
+        <context:component-scan base-package="ssm_crud.service"/>
+        <!-- Spring配置文件的核心点（数据源、与mybatis的整合，事务控制） -->
+        <context:component-scan base-package="ssm_crud" use-default-filters="false">
+            <context:exclude-filter type="annotation" expression="org.springframework.stereotype.Controller"/>
+        </context:component-scan>
+
+        <context:property-placeholder location="classpath:jdbc.properties"/>
+
+        <!--  Spring的配置文件，这里主要配置和逻辑业务有关的  -->
+        <!--  数据源，事务控制，xxx -->
+        <bean id="pooledDataSource" class="com.mchange.v2.c3p0.ComboPooledDataSource">
+            <property name="driverClass" value="${jdbc.driverClass}"/>
+            <property name="jdbcUrl" value="${jdbc.jdbcUrl}"/>
+            <property name="user" value="${jdbc.user}"/>
+            <property name="password" value="${jdbc.password}"/>
+        </bean>
+
+        <!--  配置mybatis的整合  -->
+        <bean id="sqlSessionFactory" class="org.mybatis.spring.SqlSessionFactoryBean">
+            <!--  指定mybatis的全局核心配置文件位置    -->
+                <property name="configLocation" value="classpath:mybatis-config.xml"/>
+                <property name="dataSource" ref="pooledDataSource"/>
+                <!-- 指定mybatis的映射配置文件位置          -->
+                <property name="mapperLocations" value="classpath:mybatis/mapper/*.xml"/>
+        </bean>
+        <!--   配置扫描器，将mybatis接口的实现类加入到ioc容器中    -->
+        <bean class="org.mybatis.spring.mapper.MapperScannerConfigurer">
+            <!--     扫描所有dao接口的实现，加入到ioc容器中       -->
+            <property name="basePackage" value="ssm_crud.dao"/>
+        </bean>
+
+        <!--   配置一个可以执行批量的sqlSession     -->
+        <bean id="sessionTemplate" class="org.mybatis.spring.SqlSessionTemplate">
+            <constructor-arg name="sqlSessionFactory" ref="sqlSessionFactory"/>
+            <constructor-arg name="executorType" value="BATCH"/>
+        </bean>
+
+        <!--   事务控制配置     -->
+        <!--   1.开启事务控制器     -->
+        <bean id="transactionManager" class="org.springframework.jdbc.datasource.DataSourceTransactionManager">
+            <!--     事务管理器控制的数据源       -->
+            <property name="dataSource" ref="pooledDataSource"/>
+        </bean>
+
+        <!--    配置通知：可以理解为对切入点实现的具体操作    -->
+        <tx:advice id="txadvice">
+            <tx:attributes>
+                <!--  所有方法都是事务  -->
+                <tx:method name="*"/>
+                <!--  以get开始的所有方法  -->
+                <tx:method name="get*" read-only="true"/>
+            </tx:attributes>
+        </tx:advice>
+
+        <!--   增强的配置   -->
+        <aop:config>
+            <!--  配置切入点
+            id：切入点的标识，下方切面所需要
+            expression切入点表达式：表示将通知应用再哪个类的哪个方法下
+            此处代表的是通知将应用在ssm_crud.service包下的所有方法
+            -->
+            <aop:pointcut id="txPoint" expression="execution(* ssm_crud.service..*(..))"/>
+            <!--      配置切面
+                 advice-ref：通知的标识
+                 pointcut-ref：切入点的标识id
+                 切面是指将通知应用到切入点的过程
+                 此处表示将标识为txadvice的通知的应用到切入点id为txPoint的过程
+             -->
+            <aop:advisor advice-ref="txadvice" pointcut-ref="txPoint"/>
+        </aop:config>
+
+</beans>
